@@ -6,12 +6,14 @@ verify_ssl = true
 [dev-packages]
 
 [packages]
-python-telegram-bot = "*"
 gtts = "*"
 gtts-token = "*"
 pymongo = "*"
 bs4 = "*"
 requests = "*"
+python-telegram-bot = {extras = ["job-queue"], version = "*"}
+pyttsx3 = "*"
+edge-tts = "*"
 
 [requires]
-python_version = "3.6"
+python_version = "3.12"
