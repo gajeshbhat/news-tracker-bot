@@ -1,3 +1,7 @@
+# Git
+.git
+.gitignore
+
 # Python
 __pycache__/
 *.py[cod]
@@ -19,7 +23,6 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
 # Virtual environments
 .env
@@ -48,35 +51,10 @@ ehthumbs.db
 Thumbs.db
 
 # Project specific
-*.log
 logs.txt
-
-# Audio files
-*.mp3
-*.wav
-*.ogg
-
-# Database
-*.db
-*.sqlite
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
-
-# Coverage reports
-htmlcov/
-.coverage
-.coverage.*
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
+audio_summary/*.mp3
+*.log
 
 # Documentation
-docs/_build/
-
-
-# Pipfile
-*.lock
+README.md
+docs/
