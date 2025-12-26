@@ -2,7 +2,7 @@
 
 > **Why read news when you can listen to it?**
 
-A modern Telegram bot that delivers personalized news summaries in both text and audio formats. Originally built in 2016, completely modernized in 2025 with Docker integration and AI-powered text-to-speech.
+A modern Telegram bot that delivers personalized news summaries in both text and audio formats. Originally built in 2016, modernized in 2025 with Docker integration and AI-powered text-to-speech.
 
 ## ✨ Features
 
@@ -254,7 +254,7 @@ pipenv run python -c "import news_tracker; print('✅ Package OK')"
 
 ## 📄 License & Credits
 
-- **Originally built in 2017** as a second-year CS student project
+- **Originally built in 2016** as a second-year CS student project
 - **Open source** - feel free to contribute!
 
 ## 🌟 Star History
