@@ -10,7 +10,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 setup(
     name="news-tracker-bot",
     version="1.1.0",
-    author="Gajesh",
+    author="Gajesh Bhat",
     description="A Telegram bot for personalized news summaries with audio support",
     long_description=long_description,
     long_description_content_type="text/markdown",
@@ -35,6 +35,9 @@ setup(
         "gtts>=2.2.0",
         "pyttsx3>=2.90",
         "edge-tts>=6.0.0",
+        "click>=8.0.0",
+        "tabulate>=0.9.0",
+        "python-dotenv>=0.19.0",
     ],
     extras_require={
         "dev": [
@@ -47,8 +50,8 @@ setup(
     },
     entry_points={
         "console_scripts": [
-            "news-tracker-bot=news_tracker.main:run",
-            "news-tracker-setup=news_tracker.scripts.setup_database:main",
+            "news-tracker-bot=news_tracker.cli.commands:cli",
+            "ntb=news_tracker.cli.commands:cli",
         ],
     },
     include_package_data=True,

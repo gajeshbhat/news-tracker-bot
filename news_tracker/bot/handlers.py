@@ -16,6 +16,7 @@ from telegram.constants import ParseMode
 from ..api.news_client import NewsService
 from ..utils.logging_config import get_logger, log_bot_interaction, log_error_with_context
 from .user_sessions import UserSessionManager
+from ..core.product_keys import ProductKeyManager
 
 
 class NewsTrackerBot:
@@ -25,63 +26,151 @@ class NewsTrackerBot:
         self.logger = get_logger('bot')
         self.news_service = NewsService()
         self.session_manager = UserSessionManager()
-        
+        self.key_manager = ProductKeyManager()
+
         # Help text
         self.help_text = '''
 *🤖 Welcome to News Tracker Bot*
 
 *Commands:*
-• `/start` - Welcome message
+• `/start` - Welcome message and register your product key
 • `/help` - Show this help
 • `/latest` - Get latest news summaries
+• `/schedule` - Manage automated news delivery schedules
+• `/register KEY` - Register your product key
 
 *How it works:*
-1️⃣ Send `/latest` to see available news sources
-2️⃣ Choose a news source from the menu
-3️⃣ Select format: Text, Audio, or Both
-4️⃣ Get your personalized news summary!
+1️⃣ Register your product key with `/register YOUR-KEY`
+2️⃣ Send `/latest` to see available news sources
+3️⃣ Choose a news source from the menu
+4️⃣ Select format: Text, Audio, or Both
+5️⃣ Get your personalized news summary!
+
+*Scheduled Delivery:*
+📅 Use `/schedule` to set up automated news delivery
+⏰ Choose your preferred time and timezone
+🗞️ Select up to 2 news sources per schedule
+📊 Manage up to 5 active schedules
 
 *Features:*
 📰 Text summaries with clickable links
 🔊 High-quality audio summaries
-🌍 Multiple languages supported
+🌍 Multiple languages and timezones supported
 ⚡ Real-time news updates
+🔔 Automated scheduled delivery
 
 *Powered by NewsAPI.org*
         '''
     
+    def _is_user_authorized(self, user_id: int) -> bool:
+        """Check if user has a valid product key"""
+        # Check if user has an active key assigned
+        keys = self.key_manager.list_keys(active_only=True)
+        for key in keys:
+            if key.user_id == user_id:
+                return True
+        return False
+
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
-        
+
         try:
-            await update.message.reply_text(
-                "👋 Hello! Welcome to News Tracker Bot.\n\n"
-                "I can provide you with the latest news summaries in both text and audio formats.\n\n"
-                "Type /help to see available commands or /latest to get started!"
-            )
-            
+            # Check if user is authorized
+            if self._is_user_authorized(user_id):
+                await update.message.reply_text(
+                    "👋 Hello! Welcome back to News Tracker Bot.\n\n"
+                    "I can provide you with the latest news summaries in both text and audio formats.\n\n"
+                    "Type /help to see available commands or /latest to get started!"
+                )
+            else:
+                await update.message.reply_text(
+                    "👋 Hello! Welcome to News Tracker Bot.\n\n"
+                    "🔐 To use this bot, you need a product key.\n\n"
+                    "Please register your key using:\n"
+                    "`/register YOUR-PRODUCT-KEY`\n\n"
+                    "Contact the administrator to get a product key.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+
             log_bot_interaction(user_id, '/start', True)
             self.logger.info(f"New user started bot: {user_id}")
-            
+
         except Exception as e:
             log_error_with_context(e, {'command': '/start', 'user_id': user_id})
             log_bot_interaction(user_id, '/start', False)
     
+    async def register_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /register command"""
+        user_id = update.effective_user.id
+        username = update.effective_user.username
+
+        try:
+            # Get the product key from command arguments
+            if not context.args or len(context.args) == 0:
+                await update.message.reply_text(
+                    "❌ Please provide a product key.\n\n"
+                    "Usage: `/register YOUR-PRODUCT-KEY`",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                return
+
+            product_key = context.args[0]
+
+            # Validate the key
+            key_obj = self.key_manager.validate_key(product_key)
+
+            if not key_obj:
+                await update.message.reply_text(
+                    "❌ Invalid or expired product key.\n\n"
+                    "Please check your key and try again, or contact the administrator."
+                )
+                log_bot_interaction(user_id, '/register', False)
+                return
+
+            # Check if key is already assigned to another user
+            if key_obj.user_id and key_obj.user_id != user_id:
+                await update.message.reply_text(
+                    "❌ This product key is already assigned to another user."
+                )
+                log_bot_interaction(user_id, '/register', False)
+                return
+
+            # Assign key to user
+            if self.key_manager.assign_key_to_user(product_key, user_id, username):
+                await update.message.reply_text(
+                    "✅ Product key registered successfully!\n\n"
+                    "You can now use the bot. Type /latest to get started!"
+                )
+                log_bot_interaction(user_id, '/register', True)
+                self.logger.info(f"User {user_id} ({username}) registered with product key")
+            else:
+                await update.message.reply_text(
+                    "❌ Failed to register product key. Please try again later."
+                )
+                log_bot_interaction(user_id, '/register', False)
+
+        except Exception as e:
+            log_error_with_context(e, {'command': '/register', 'user_id': user_id})
+            log_bot_interaction(user_id, '/register', False)
+            await update.message.reply_text(
+                "❌ An error occurred. Please try again later."
+            )
+
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
         user_id = update.effective_user.id
-        
+
         try:
             await update.message.reply_text(
                 text=self.help_text,
                 disable_web_page_preview=True,
                 parse_mode=ParseMode.MARKDOWN
             )
-            
+
             log_bot_interaction(user_id, '/help', True)
-            
+
         except Exception as e:
             log_error_with_context(e, {'command': '/help', 'user_id': user_id})
             log_bot_interaction(user_id, '/help', False)
@@ -90,8 +179,19 @@ class NewsTrackerBot:
         """Handle /latest command"""
         user_id = update.effective_user.id
         chat_id = update.effective_chat.id
-        
+
         try:
+            # Check authorization
+            if not self._is_user_authorized(user_id):
+                await update.message.reply_text(
+                    "🔐 You need to register a product key first.\n\n"
+                    "Use: `/register YOUR-PRODUCT-KEY`\n\n"
+                    "Contact the administrator to get a product key.",
+                    parse_mode=ParseMode.MARKDOWN
+                )
+                log_bot_interaction(user_id, '/latest', False)
+                return
+
             # Get available news sources
             sources = self.news_service.database.get_all_sources()
             

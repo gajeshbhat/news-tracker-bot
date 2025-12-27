@@ -251,16 +251,82 @@ class TTSManager:
         self.logger.error("❌ All TTS engines failed")
         return False
     
+    async def generate_audio_async(self, text: str, language: str, output_path: str,
+                                   engine_preference: Optional[str] = None) -> bool:
+        """
+        Async version of generate_audio for use in async contexts
+
+        Args:
+            text: Text to convert to speech
+            language: Language code (e.g., 'en', 'es')
+            output_path: Path to save audio file
+            engine_preference: Preferred engine ('edge', 'gtts', 'pyttsx3')
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+
+        if not self.engines:
+            self.logger.error("No TTS engines available")
+            return False
+
+        # Determine engine order
+        if engine_preference and engine_preference in self.engines:
+            engines_to_try = [engine_preference] + [e for e in self.preferred_order if e != engine_preference]
+        else:
+            engines_to_try = self.preferred_order
+
+        # Filter to only available engines
+        engines_to_try = [e for e in engines_to_try if e in self.engines]
+
+        # Try engines in order
+        for engine_name in engines_to_try:
+            engine = self.engines[engine_name]
+
+            # Check if engine supports the language
+            if language not in engine.supported_languages:
+                self.logger.debug(f"{engine_name} doesn't support language '{language}', trying next...")
+                continue
+
+            self.logger.info(f"Trying {engine_name} TTS engine...")
+
+            # Use async method for edge-tts, sync for others
+            try:
+                if engine_name == 'edge' and hasattr(engine, 'generate_audio_async'):
+                    result = await engine.generate_audio_async(text, language, output_path)
+                else:
+                    # Run sync engines in executor to avoid blocking
+                    import asyncio
+                    loop = asyncio.get_event_loop()
+                    result = await loop.run_in_executor(
+                        None,
+                        engine.generate_audio,
+                        text,
+                        language,
+                        output_path
+                    )
+
+                if result:
+                    self.logger.info(f"✅ Audio generated successfully with {engine_name}")
+                    return True
+                else:
+                    self.logger.warning(f"❌ {engine_name} failed, trying next engine...")
+            except Exception as e:
+                self.logger.warning(f"❌ {engine_name} error: {e}, trying next engine...")
+
+        self.logger.error("❌ All TTS engines failed")
+        return False
+
     def get_available_engines(self) -> List[str]:
         """Get list of available engines"""
         return list(self.engines.keys())
-    
+
     def get_supported_languages(self, engine_name: str) -> Dict:
         """Get supported languages for an engine"""
         if engine_name in self.engines:
             return self.engines[engine_name].supported_languages
         return {}
-    
+
     def is_language_supported(self, language: str) -> bool:
         """Check if any engine supports the language"""
         for engine in self.engines.values():

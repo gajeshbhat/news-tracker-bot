@@ -27,12 +27,12 @@ class DatabaseConfig:
 class TelegramConfig:
     """Telegram bot configuration"""
     bot_token: str
-    
+
     @classmethod
     def from_env(cls) -> 'TelegramConfig':
-        token = os.getenv('SHABDA_TELE_KEY')
+        token = os.getenv('TELEGRAM_BOT_TOKEN')
         if not token:
-            raise ValueError("SHABDA_TELE_KEY environment variable is required")
+            raise ValueError("TELEGRAM_BOT_TOKEN environment variable is required")
         return cls(bot_token=token)
 
 

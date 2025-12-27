@@ -294,17 +294,21 @@ class NewsService:
         
         # Build audio script
         script = f"Recent headlines from {source_name} today are: "
-        
+
         for article in articles[:5]:  # Limit to 5 articles for audio
             title = article.get('title', '')
             description = article.get('description', '')
-            
+
             if title:
                 script += f"{title}. "
                 if description and len(description) < 200:
                     script += f"{description}. "
                 script += "In other news, "
-        
+
+        # Remove trailing "In other news, " before the closing
+        if script.endswith("In other news, "):
+            script = script[:-len("In other news, ")]
+
         script += "Check back later for updates."
         
         # Generate audio file

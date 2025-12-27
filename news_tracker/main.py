@@ -13,7 +13,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from .core.config import get_config
 from .utils.logging_config import setup_logging, get_logger
 from .bot.handlers import NewsTrackerBot
+from .bot.schedule_handlers import ScheduleHandlers
 from .api.news_client import NewsService
+from .jobs.scheduled_delivery import ScheduledDelivery
 
 
 class NewsTrackerApplication:
@@ -35,7 +37,9 @@ class NewsTrackerApplication:
         # Initialize services
         self.news_service = NewsService()
         self.bot_handlers = NewsTrackerBot()
-        
+        self.schedule_handlers = None  # Initialized after application is created
+        self.scheduled_delivery = None  # Initialized after application is created
+
         # Telegram application
         self.application = None
         
@@ -45,13 +49,21 @@ class NewsTrackerApplication:
         
         # Create application
         self.application = Application.builder().token(self.config.telegram.bot_token).build()
-        
+
+        # Initialize schedule handlers (needs application for job queue)
+        self.schedule_handlers = ScheduleHandlers(self.config)
+        self.scheduled_delivery = ScheduledDelivery(self.config, self.application.job_queue)
+
         # Add command handlers
         self.application.add_handler(CommandHandler('start', self.bot_handlers.start_command))
+        self.application.add_handler(CommandHandler('register', self.bot_handlers.register_command))
         self.application.add_handler(CommandHandler('help', self.bot_handlers.help_command))
         self.application.add_handler(CommandHandler('latest', self.bot_handlers.latest_command))
-        
-        # Add message handler for text messages
+
+        # Add schedule conversation handler
+        self.application.add_handler(self.schedule_handlers.get_conversation_handler())
+
+        # Add message handler for text messages (must be last)
         self.application.add_handler(MessageHandler(filters.TEXT, self.bot_handlers.handle_message))
         
         # Setup job queue for periodic tasks
@@ -140,6 +152,12 @@ class NewsTrackerApplication:
                     return False
             else:
                 self.logger.info(f"Found {len(sources)} news sources in database")
+
+            # Initialize scheduled jobs
+            self.logger.info("Initializing scheduled news deliveries...")
+            self.scheduled_delivery.initialize_all_schedules()
+            active_jobs = self.scheduled_delivery.get_active_job_count()
+            self.logger.info(f"Initialized {active_jobs} scheduled delivery jobs")
 
             # Start the bot
             self.logger.info("Bot is ready! Starting polling...")
