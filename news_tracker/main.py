@@ -8,7 +8,7 @@ import signal
 import sys
 from pathlib import Path
 
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 from .core.config import get_config
 from .utils.logging_config import setup_logging, get_logger
@@ -62,6 +62,16 @@ class NewsTrackerApplication:
 
         # Add schedule conversation handler
         self.application.add_handler(self.schedule_handlers.get_conversation_handler())
+
+        # Add callback query handlers for /latest pagination and format selection
+        self.application.add_handler(CallbackQueryHandler(
+            self.bot_handlers.handle_latest_callback,
+            pattern='^latest_'
+        ))
+        self.application.add_handler(CallbackQueryHandler(
+            self.bot_handlers.handle_format_callback,
+            pattern='^format_'
+        ))
 
         # Add message handler for text messages (must be last)
         self.application.add_handler(MessageHandler(filters.TEXT, self.bot_handlers.handle_message))

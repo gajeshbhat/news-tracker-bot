@@ -19,6 +19,7 @@ tabulate = "*"
 python-dotenv = "*"
 pytz = "*"
 langdetect = "*"
+feedparser = "*"
 news-tracker-bot = {file = ".", editable = true}
 
 [requires]

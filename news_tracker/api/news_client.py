@@ -3,11 +3,14 @@ News API client for fetching news data
 Modernized version with proper error handling and logging
 """
 
+import re
 import requests
 import time
+import feedparser
 from typing import Dict, List, Optional, Any
 from pymongo import MongoClient
 from gtts import lang
+from langdetect import detect, LangDetectException
 
 from ..core.config import get_config
 from ..utils.logging_config import get_logger, log_api_call, log_error_with_context
@@ -217,6 +220,67 @@ class NewsService:
             self.logger.error("Failed to save sources to database")
             return False
     
+    def _is_google_news_source(self, source_id: str) -> bool:
+        """Check if source is a Google News source"""
+        return source_id.startswith('google-news')
+
+    def _clean_google_news_title(self, title: str) -> str:
+        """Remove source attribution from Google News titles"""
+        # Google News titles often end with " - Source Name"
+        # Remove everything after the last " - "
+        if ' - ' in title:
+            # Split by " - " and take all parts except the last one
+            parts = title.rsplit(' - ', 1)
+            return parts[0].strip()
+        return title
+
+    def _fetch_google_news_rss(self, source: dict) -> List[Dict[str, Any]]:
+        """Fetch articles from Google News RSS feed"""
+        try:
+            # Extract country code from source_id (e.g., 'google-news-ca' -> 'CA')
+            source_id = source['search_id']
+            country_code = source_id.split('-')[-1].upper()
+            language = source.get('language', 'en')
+
+            # Build RSS URL
+            rss_url = f"https://news.google.com/rss?hl={language}-{country_code}&gl={country_code}&ceid={country_code}:{language}"
+
+            self.logger.info(f"Fetching Google News RSS from: {rss_url}")
+
+            # Parse RSS feed
+            feed = feedparser.parse(rss_url)
+
+            if not feed.entries:
+                self.logger.warning(f"No entries found in Google News RSS feed for {source['name']}")
+                return []
+
+            # Convert RSS entries to NewsAPI format
+            articles = []
+            for entry in feed.entries[:20]:  # Limit to 20 articles
+                # Clean the title to remove source attribution
+                raw_title = entry.get('title', '')
+                clean_title = self._clean_google_news_title(raw_title)
+
+                article = {
+                    'source': {
+                        'id': source_id,
+                        'name': source['name']
+                    },
+                    'title': clean_title,
+                    'description': entry.get('summary', ''),
+                    'url': entry.get('link', ''),
+                    'publishedAt': entry.get('published', ''),
+                    'content': entry.get('summary', '')
+                }
+                articles.append(article)
+
+            self.logger.info(f"Fetched {len(articles)} articles from Google News RSS")
+            return articles
+
+        except Exception as e:
+            self.logger.error(f"Error fetching Google News RSS: {e}")
+            return []
+
     def fetch_and_store_articles(self, source_name: str) -> bool:
         """Fetch articles for a source and store them"""
         # Get source info
@@ -224,49 +288,164 @@ class NewsService:
         if not source:
             self.logger.error(f"Source not found: {source_name}")
             return False
-        
-        # Fetch articles from API
-        articles_data = self.api_client.get_headlines(source['search_id'])
-        if not articles_data or articles_data.get('status') != 'ok':
-            self.logger.error(f"Failed to fetch articles for {source_name}")
+
+        # Check if this is a Google News source
+        if self._is_google_news_source(source['search_id']):
+            # Use RSS feed for Google News
+            articles = self._fetch_google_news_rss(source)
+            if not articles:
+                self.logger.error(f"Failed to fetch articles from Google News RSS for {source_name}")
+                return False
+            return self.database.save_articles(source['search_id'], articles)
+        else:
+            # Use NewsAPI for other sources
+            articles_data = self.api_client.get_headlines(source['search_id'])
+            if not articles_data or articles_data.get('status') != 'ok':
+                self.logger.error(f"Failed to fetch articles for {source_name}")
+                return False
+
+            # Store articles
+            articles = articles_data.get('articles', [])
+            return self.database.save_articles(source['search_id'], articles)
+
+    def _strip_html(self, text: str) -> str:
+        """Remove HTML tags and clean up text"""
+        if not text:
+            return ""
+
+        # Remove HTML tags
+        text = re.sub(r'<[^>]+>', '', text)
+
+        # Decode common HTML entities
+        text = text.replace('&nbsp;', ' ')
+        text = text.replace('&amp;', '&')
+        text = text.replace('&lt;', '<')
+        text = text.replace('&gt;', '>')
+        text = text.replace('&quot;', '"')
+        text = text.replace('&#39;', "'")
+
+        # Remove extra whitespace
+        text = re.sub(r'\s+', ' ', text)
+        text = text.strip()
+
+        return text
+
+    def _detect_language(self, text: str) -> Optional[str]:
+        """Detect language of text using langdetect"""
+        if not text or len(text.strip()) < 10:
+            return None
+
+        try:
+            # Detect language (returns ISO 639-1 code like 'en', 'es', etc.)
+            detected = detect(text)
+            return detected
+        except LangDetectException:
+            return None
+
+    def _is_valid_article(self, article: dict, source_name: str, expected_language: str = 'en') -> bool:
+        """
+        Check if article has meaningful content and matches expected language
+
+        Args:
+            article: Article dictionary
+            source_name: Name of the news source
+            expected_language: Expected language code (e.g., 'en', 'es')
+
+        Returns:
+            bool: True if article is valid and in expected language
+        """
+        title = article.get('title', '')
+        description = article.get('description', '')
+
+        # Filter out generic "Google News" titles
+        if title.strip().lower() == 'google news':
             return False
-        
-        # Store articles
-        articles = articles_data.get('articles', [])
-        return self.database.save_articles(source['search_id'], articles)
+
+        # Filter out descriptions that are just generic Google News text
+        if description and 'comprehensive up-to-date news coverage' in description.lower():
+            return False
+
+        # Filter out descriptions that are just "aggregated from sources all over the world"
+        if description and 'aggregated from sources all over the world' in description.lower():
+            return False
+
+        # Check language if we have enough text
+        text_to_check = f"{title} {description}".strip()
+        if len(text_to_check) > 20:
+            detected_lang = self._detect_language(text_to_check)
+            if detected_lang and detected_lang != expected_language:
+                self.logger.debug(
+                    f"Filtering article from {source_name}: "
+                    f"expected {expected_language}, got {detected_lang} - '{title[:50]}...'"
+                )
+                return False
+
+        return True
     
     def get_text_summary(self, source_name: str) -> str:
         """Generate text summary for a source"""
         source = self.database.get_source_by_name(source_name)
         if not source:
             return f"❌ Source '{source_name}' not found."
-        
+
         articles_doc = self.database.get_articles_by_source(source['search_id'])
         if not articles_doc:
             return f"❌ No articles found for {source_name}. Try again later."
-        
+
         articles = articles_doc.get('articles', [])
         if not articles:
             return f"❌ No articles available for {source_name}."
-        
+
+        # Get expected language for this source
+        expected_language = source.get('language', 'en')
+
         # Build summary
         summary = f"*📰 {source_name} - Breaking Headlines*\n\n"
-        
-        for article in articles[:10]:  # Limit to 10 articles
+
+        valid_count = 0
+        for article in articles:
+            # Filter out invalid/generic articles
+            if not self._is_valid_article(article, source_name, expected_language):
+                continue
+
+            if valid_count >= 10:  # Limit to 10 valid articles
+                break
+
             title = article.get('title', 'No title')
+            description = article.get('description', '')
             url = article.get('url', '')
-            
+
+            # Clean HTML from title and description
+            title = self._strip_html(title)
+            description = self._strip_html(description)
+
+            # Add title with link
             if url:
-                summary += f"• [{title}]({url})\n\n"
+                summary += f"• [{title}]({url})\n"
             else:
-                summary += f"• {title}\n\n"
-        
+                summary += f"• {title}\n"
+
+            # Add description if available (truncate if too long)
+            # Don't use markdown formatting for description to avoid parsing errors
+            if description:
+                if len(description) > 200:
+                    description = description[:200] + "..."
+                summary += f"  {description}\n\n"
+            else:
+                summary += "\n"
+
+            valid_count += 1
+
+        # Check if we found any valid articles
+        if valid_count == 0:
+            return f"❌ No valid articles available for {source_name}. The source may have generic placeholder content."
+
         summary += "Check back later for updates! 📱"
-        
+
         # Ensure summary doesn't exceed Telegram limits
         if len(summary) > self.config.max_summary_length:
             summary = summary[:self.config.max_summary_length - 50] + "...\n\n📱 Check back later for updates!"
-        
+
         return summary
     
     def generate_audio_summary(self, source_name: str) -> Optional[str]:
@@ -275,29 +454,43 @@ class NewsService:
         if not source:
             self.logger.error(f"Source not found: {source_name}")
             return None
-        
+
         articles_doc = self.database.get_articles_by_source(source['search_id'])
         if not articles_doc:
             self.logger.error(f"No articles found for {source_name}")
             return None
-        
+
         articles = articles_doc.get('articles', [])
         if not articles:
             self.logger.error(f"No articles available for {source_name}")
             return None
-        
+
         # Check if language is supported for TTS
         language = source.get('language', 'en')
         if language not in lang.tts_langs():
             self.logger.warning(f"Language {language} not supported for TTS")
             return None
-        
+
+        # Filter valid articles first
+        valid_articles = [
+            a for a in articles
+            if self._is_valid_article(a, source_name, language)
+        ]
+
+        if not valid_articles:
+            self.logger.warning(f"No valid articles for {source_name} after filtering")
+            return None
+
         # Build audio script
         script = f"Recent headlines from {source_name} today are: "
 
-        for article in articles[:5]:  # Limit to 5 articles for audio
+        for article in valid_articles[:10]:  # Limit to 10 valid articles for audio (matching text summary)
             title = article.get('title', '')
             description = article.get('description', '')
+
+            # Clean HTML from title and description
+            title = self._strip_html(title)
+            description = self._strip_html(description)
 
             if title:
                 script += f"{title}. "
@@ -310,10 +503,10 @@ class NewsService:
             script = script[:-len("In other news, ")]
 
         script += "Check back later for updates."
-        
+
         # Generate audio file
         audio_path = f"{self.config.tts.audio_output_dir}/{source_name}-summary.mp3"
-        
+
         if self.tts_manager.generate_audio(script, language, audio_path, self.config.tts.preferred_engine):
             self.logger.info(f"Generated audio summary for {source_name}")
             return audio_path
