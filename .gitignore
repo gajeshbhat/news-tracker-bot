@@ -31,7 +31,6 @@ venv/
 ENV/
 env.bak/
 venv.bak/
-.pipenv/
 
 # IDE
 .vscode/
@@ -78,7 +77,3 @@ coverage.xml
 
 # Documentation
 docs/_build/
-
-
-# Keep Pipfile.lock for reproducible builds
-# *.lock

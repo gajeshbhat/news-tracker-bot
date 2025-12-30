@@ -23,9 +23,9 @@ echo "media-video/ffmpeg amr encode opus x264" | sudo tee -a /etc/portage/packag
 
 sudo emerge --ask media-video/ffmpeg \
     app-containers/docker \
-    app-containers/docker-compose \
     dev-vcs/git \
-    app-editors/vim
+    app-editors/vim \
+    sys-process/cronie
 
 echo "System packages installed"
 echo ""
@@ -38,14 +38,12 @@ sudo usermod -aG docker $USER
 echo "Docker configured (log out and back in for group changes)"
 echo ""
 
-# Install pipenv
-echo "Installing pipenv..."
-pip3 install --user pipenv
-if ! grep -q '.local/bin' ~/.bashrc; then
-    echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-fi
-export PATH="$HOME/.local/bin:$PATH"
-echo "pipenv installed"
+# Configure cron
+echo "Configuring cron..."
+sudo mkdir -p /var/spool/cron/crontabs
+sudo systemctl enable cronie
+sudo systemctl start cronie
+echo "Cron configured"
 echo ""
 
 # Verify project directory
@@ -54,9 +52,12 @@ if [ ! -f "setup.py" ] || [ ! -d "news_tracker" ]; then
     exit 1
 fi
 
-# Install Python dependencies
+# Create virtual environment and install dependencies
+echo "Creating virtual environment..."
+python3 -m venv venv
+source venv/bin/activate
 echo "Installing Python dependencies..."
-pipenv install
+pip install -e .
 echo ""
 
 # Setup MongoDB
@@ -88,11 +89,13 @@ echo ""
 
 # Initialize database
 echo "Initializing database..."
-pipenv run ntb db init
+./venv/bin/ntb db init
 echo ""
 
 # Create systemd service
 echo "Creating systemd service..."
+VENV_PATH="$(pwd)/venv"
+WORK_DIR="$(pwd)"
 sudo tee /etc/systemd/system/news-tracker-bot.service > /dev/null <<EOF
 [Unit]
 Description=News Tracker Bot
@@ -102,9 +105,9 @@ Requires=docker.service
 [Service]
 Type=simple
 User=$(whoami)
-WorkingDirectory=$(pwd)
-Environment="PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=$HOME/.local/bin/pipenv run ntb bot start
+WorkingDirectory=$WORK_DIR
+Environment="PATH=$VENV_PATH/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=$VENV_PATH/bin/ntb bot start
 Restart=always
 RestartSec=10
 
@@ -134,13 +137,13 @@ echo ""
 
 # Setup automated cleanup
 echo "Setting up automated cleanup..."
-CRON_JOB="0 3 * * * cd $(pwd) && $HOME/.local/bin/pipenv run python -m news_tracker.scripts.cleanup >> $(pwd)/logs/cleanup.log 2>&1"
-if ! crontab -l 2>/dev/null | grep -q "news_tracker.scripts.cleanup"; then
-    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
-    echo "Cleanup cron job added (runs daily at 3 AM)"
-else
-    echo "Cleanup cron job already exists"
-fi
+WORK_DIR="$(pwd)"
+VENV_PYTHON="$WORK_DIR/venv/bin/python"
+sudo tee /etc/cron.d/news-tracker-cleanup > /dev/null <<EOF
+0 3 * * * $(whoami) cd $WORK_DIR && $VENV_PYTHON -m news_tracker.scripts.cleanup >> $WORK_DIR/logs/cleanup.log 2>&1
+EOF
+sudo systemctl restart cronie
+echo "Cleanup cron job added (runs daily at 3 AM)"
 echo ""
 
 echo "Setup complete!"
@@ -148,10 +151,11 @@ echo ""
 echo "Next steps:"
 echo "1. Log out and back in (for docker group)"
 echo "2. Edit .env if needed: vim .env"
-echo "3. Test: pipenv run ntb bot start"
-echo "4. Run in background: sudo systemctl start news-tracker-bot"
-echo "5. Enable on boot: sudo systemctl enable news-tracker-bot"
-echo "6. Check status: sudo systemctl status news-tracker-bot"
-echo "7. View logs: journalctl -u news-tracker-bot -f"
+echo "3. Generate product key: source venv/bin/activate && ntb keys generate --expires-in 365"
+echo "4. Test: source venv/bin/activate && ntb bot start"
+echo "5. Run in background: sudo systemctl start news-tracker-bot"
+echo "6. Enable on boot: sudo systemctl enable news-tracker-bot"
+echo "7. Check status: sudo systemctl status news-tracker-bot"
+echo "8. View logs: journalctl -u news-tracker-bot -f"
 echo ""
 

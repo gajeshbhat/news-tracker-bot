@@ -1,0 +1,4 @@
+# News Tracker Bot cleanup - runs daily at 3 AM
+# Replace YOUR_USERNAME and /path/to/news-tracker-bot with actual values
+0 3 * * * YOUR_USERNAME cd /path/to/news-tracker-bot && /path/to/news-tracker-bot/venv/bin/python -m news_tracker.scripts.cleanup >> /path/to/news-tracker-bot/logs/cleanup.log 2>&1
+

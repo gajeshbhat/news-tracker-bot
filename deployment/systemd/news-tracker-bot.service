@@ -1,0 +1,17 @@
+[Unit]
+Description=News Tracker Bot
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=YOUR_USERNAME
+WorkingDirectory=/path/to/news-tracker-bot
+Environment="PATH=/path/to/news-tracker-bot/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/path/to/news-tracker-bot/venv/bin/ntb bot start
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+

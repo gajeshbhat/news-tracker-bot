@@ -6,7 +6,7 @@ This tutorial will guide you through setting up and using the News Tracker Bot f
 
 - A computer running Linux, macOS, or Windows (with WSL)
 - Python 3.8 or higher installed
-- Docker and Docker Compose installed
+- Docker installed
 - About 15 minutes
 
 ## Step 1: Get Your API Keys
@@ -55,31 +55,37 @@ MONGO_URI=mongodb://localhost:27017/news_db
 ## Step 4: Start MongoDB
 
 ```bash
-docker compose up -d mongodb
+docker run -d \
+    --name news-tracker-mongo \
+    --restart unless-stopped \
+    -p 27017:27017 \
+    -v news-tracker-mongo-data:/data/db \
+    mongo:7.0
 ```
 
 Wait a few seconds for MongoDB to start, then verify:
 
 ```bash
-docker compose ps
+docker ps | grep news-tracker-mongo
 ```
 
-You should see `mongodb` with status "Up".
+You should see the container running.
 
 ## Step 5: Install Dependencies
 
 ```bash
-# Install pipenv if you don't have it
-pip install pipenv
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
 
 # Install project dependencies
-pipenv install
+pip install -e .
 ```
 
 ## Step 6: Initialize Database
 
 ```bash
-pipenv run ntb db init
+ntb db init
 ```
 
 You should see: "✅ Successfully loaded 127 news sources"
@@ -87,7 +93,7 @@ You should see: "✅ Successfully loaded 127 news sources"
 ## Step 7: Generate Your Product Key
 
 ```bash
-pipenv run ntb keys generate --notes "My admin key"
+ntb keys generate --expires-in 365
 ```
 
 **Important**: Save the key that's displayed! It looks like: `NTB-XXXX-XXXX-XXXX-XXXX`
@@ -95,7 +101,7 @@ pipenv run ntb keys generate --notes "My admin key"
 ## Step 8: Start the Bot
 
 ```bash
-pipenv run ntb bot start
+ntb bot start
 ```
 
 You should see:
@@ -130,21 +136,22 @@ Press Ctrl+C to stop
 
 - **Explore more sources**: Try different news sources with `/latest`
 - **Setup schedules**: Get automated news delivery with `/schedule`
-- **Manage keys**: Learn CLI commands in the [CLI Reference](../reference/CLI_USAGE.md)
+- **Manage keys**: Learn CLI commands in the [CLI Reference](../reference/cli.md)
 - **Customize**: Adjust settings in your `.env` file
 
 ## Troubleshooting
 
 ### Bot doesn't respond
-- Check if the bot is running: `pipenv run ntb bot status`
 - Check logs: `tail -f logs/news_tracker.log`
+- Ensure MongoDB is running: `docker ps | grep mongo`
 
 ### MongoDB connection error
-- Ensure MongoDB is running: `docker compose ps`
-- Restart MongoDB: `docker compose restart mongodb`
+- Ensure MongoDB is running: `docker ps | grep news-tracker-mongo`
+- Restart MongoDB: `docker restart news-tracker-mongo`
 
 ### "ntb: command not found"
-- Reinstall the package: `pipenv install -e .`
+- Activate venv: `source venv/bin/activate`
+- Reinstall the package: `pip install -e .`
 
 ### Audio doesn't work
 - Edge-TTS requires internet connection
@@ -156,13 +163,13 @@ Press `Ctrl+C` in the terminal where the bot is running.
 
 To stop MongoDB:
 ```bash
-docker compose down
+docker stop news-tracker-mongo
 ```
 
 ## Next Steps
 
-- Read the [Scheduling Guide](../how-to/SCHEDULING_GUIDE.md) to learn about automated delivery
-- Check the [CLI Reference](../reference/CLI_USAGE.md) for all available commands
+- Read the [Scheduling Guide](../how-to/scheduling.md) to learn about automated delivery
+- Check the [CLI Reference](../reference/cli.md) for all available commands
 - Explore different news sources and languages!
 
 ---

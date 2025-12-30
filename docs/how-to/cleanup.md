@@ -10,19 +10,24 @@ The cleanup script removes old audio files, articles, and inactive schedules to 
 
 ## Manual Cleanup
 
+Activate virtual environment first:
+```bash
+source venv/bin/activate
+```
+
 View current storage:
 ```bash
-pipenv run python -m news_tracker.scripts.cleanup --stats-only
+python -m news_tracker.scripts.cleanup --stats-only
 ```
 
 Run cleanup with defaults:
 ```bash
-pipenv run python -m news_tracker.scripts.cleanup
+python -m news_tracker.scripts.cleanup
 ```
 
 Custom retention periods:
 ```bash
-pipenv run python -m news_tracker.scripts.cleanup \
+python -m news_tracker.scripts.cleanup \
     --audio-age 48 \
     --articles-age 14 \
     --schedules-age 180
@@ -34,20 +39,35 @@ The setup script automatically configures a cron job that runs daily at 3 AM.
 
 ### Manual Cron Setup
 
-If you didn't use the setup script, add this to crontab:
+If you didn't use the setup script, you can set it up manually.
 
+Option 1: System cron (recommended for Gentoo):
+```bash
+sudo tee /etc/cron.d/news-tracker-cleanup > /dev/null <<EOF
+0 3 * * * yourusername cd /path/to/news-tracker-bot && /path/to/news-tracker-bot/venv/bin/python -m news_tracker.scripts.cleanup >> /path/to/news-tracker-bot/logs/cleanup.log 2>&1
+EOF
+
+sudo systemctl restart cronie  # or cron on Ubuntu/Debian
+```
+
+Option 2: User crontab:
 ```bash
 crontab -e
 ```
 
-Add this line (replace `/path/to/project` with your actual path):
+Add this line (replace paths with your actual paths):
 ```
-0 3 * * * cd /path/to/project && $HOME/.local/bin/pipenv run python -m news_tracker.scripts.cleanup >> /path/to/project/logs/cleanup.log 2>&1
+0 3 * * * cd /path/to/news-tracker-bot && /path/to/news-tracker-bot/venv/bin/python -m news_tracker.scripts.cleanup >> /path/to/news-tracker-bot/logs/cleanup.log 2>&1
 ```
 
 ### Verify Cron Job
 
-Check if cleanup is scheduled:
+Check system cron:
+```bash
+cat /etc/cron.d/news-tracker-cleanup
+```
+
+Or check user crontab:
 ```bash
 crontab -l | grep cleanup
 ```

@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Linux system (Gentoo, Ubuntu, Debian)
-- Python 3.12+
+- Python 3.8+
 - Docker
 - Telegram Bot Token from @BotFather
 - NewsAPI key from newsapi.org
@@ -13,8 +13,11 @@
 ```bash
 git clone <repository-url>
 cd news-tracker-bot
+chmod +x deployment/gentoo-pi/setup.sh
 ./deployment/gentoo-pi/setup.sh
 ```
+
+Follow the prompts to configure your API keys.
 
 After setup completes, log out and back in, then:
 
@@ -31,25 +34,19 @@ Gentoo:
 ```bash
 sudo mkdir -p /etc/portage/package.use
 echo "media-video/ffmpeg amr encode opus x264" | sudo tee -a /etc/portage/package.use/ffmpeg
-sudo emerge media-video/ffmpeg app-containers/docker app-containers/docker-compose dev-vcs/git app-editors/vim
+sudo emerge media-video/ffmpeg app-containers/docker dev-vcs/git app-editors/vim sys-process/cronie
 sudo systemctl enable --now docker
+sudo systemctl enable --now cronie
 sudo usermod -aG docker $USER
 ```
 
 Ubuntu/Debian:
 ```bash
 sudo apt update
-sudo apt install -y python3.12 python3-pip ffmpeg docker.io docker-compose git vim
+sudo apt install -y python3 python3-pip python3-venv ffmpeg docker.io git vim cron
 sudo systemctl enable --now docker
+sudo systemctl enable --now cron
 sudo usermod -aG docker $USER
-```
-
-### Install pipenv
-
-```bash
-pip3 install --user pipenv
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
 ```
 
 ### Setup Project
@@ -57,7 +54,15 @@ source ~/.bashrc
 ```bash
 git clone <repository-url>
 cd news-tracker-bot
-pipenv install
+
+# Create virtual environment
+python3 -m venv venv
+source venv/bin/activate
+
+# Install dependencies
+pip install -e .
+
+# Configure environment
 cp .env.example .env
 vim .env  # Add TELEGRAM_BOT_TOKEN and NEWS_API_KEY
 ```
@@ -76,13 +81,13 @@ docker run -d \
 ### Initialize Database
 
 ```bash
-pipenv run ntb db init
+ntb db init
 ```
 
 ### Test
 
 ```bash
-pipenv run ntb bot start
+ntb bot start
 ```
 
 Press Ctrl+C to stop.
@@ -92,7 +97,11 @@ Press Ctrl+C to stop.
 Create systemd service:
 
 ```bash
-sudo tee /etc/systemd/system/news-tracker-bot.service > /dev/null <<EOFSERVICE
+# Get absolute paths
+VENV_PATH="$(pwd)/venv"
+WORK_DIR="$(pwd)"
+
+sudo tee /etc/systemd/system/news-tracker-bot.service > /dev/null <<EOF
 [Unit]
 Description=News Tracker Bot
 After=network.target docker.service
@@ -101,15 +110,15 @@ Requires=docker.service
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$(pwd)
-Environment="PATH=$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin"
-ExecStart=$HOME/.local/bin/pipenv run ntb bot start
+WorkingDirectory=$WORK_DIR
+Environment="PATH=$VENV_PATH/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=$VENV_PATH/bin/ntb bot start
 Restart=always
 RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
-EOFSERVICE
+EOF
 
 sudo systemctl daemon-reload
 sudo systemctl enable news-tracker-bot
@@ -119,7 +128,7 @@ sudo systemctl start news-tracker-bot
 ### Setup Log Rotation
 
 ```bash
-sudo tee /etc/logrotate.d/news-tracker-bot > /dev/null <<EOFLOG
+sudo tee /etc/logrotate.d/news-tracker-bot > /dev/null <<EOF
 $(pwd)/logs/*.log {
     daily
     rotate 7
@@ -129,21 +138,30 @@ $(pwd)/logs/*.log {
     notifempty
     create 0644 $USER $USER
 }
-EOFLOG
+EOF
 ```
 
 ### Setup Automated Cleanup
 
 See [cleanup guide](cleanup.md) for details.
 
-Quick setup:
+Quick setup (Gentoo/systems with cron.d):
+```bash
+sudo tee /etc/cron.d/news-tracker-cleanup > /dev/null <<EOF
+0 3 * * * $USER cd $(pwd) && $(pwd)/venv/bin/python -m news_tracker.scripts.cleanup >> $(pwd)/logs/cleanup.log 2>&1
+EOF
+
+sudo systemctl restart cronie  # or cron on Ubuntu/Debian
+```
+
+Alternative (user crontab):
 ```bash
 crontab -e
 ```
 
 Add this line:
 ```
-0 3 * * * cd $(pwd) && $HOME/.local/bin/pipenv run python -m news_tracker.scripts.cleanup >> $(pwd)/logs/cleanup.log 2>&1
+0 3 * * * cd /path/to/news-tracker-bot && /path/to/news-tracker-bot/venv/bin/python -m news_tracker.scripts.cleanup >> /path/to/news-tracker-bot/logs/cleanup.log 2>&1
 ```
 
 ## Managing the Service

@@ -17,8 +17,8 @@ A modern Telegram bot that delivers personalized news summaries in both text and
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Python 3.8+ (3.12+ recommended)
-- Docker & Docker Compose
+- Python 3.8+
+- Docker
 - Telegram Bot Token (from @BotFather)
 - News API Key (from newsapi.org)
 
@@ -35,18 +35,26 @@ cp .env.example .env
 # NEWS_API_KEY=your_newsapi_key
 
 # 3. Start MongoDB
-docker compose up -d mongodb
+docker run -d \
+    --name news-tracker-mongo \
+    --restart unless-stopped \
+    -p 27017:27017 \
+    -v news-tracker-mongo-data:/data/db \
+    mongo:7.0
 
-# 4. Install and initialize
-pip install pipenv
-pipenv install
-pipenv run ntb db init
+# 4. Create virtual environment and install
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
 
-# 5. Generate a product key
-pipenv run ntb keys generate --notes "Admin key"
+# 5. Initialize database
+ntb db init
 
-# 6. Start the bot
-pipenv run ntb bot start
+# 6. Generate a product key
+ntb keys generate --expires-in 365
+
+# 7. Start the bot
+ntb bot start
 ```
 
 ### First Use
