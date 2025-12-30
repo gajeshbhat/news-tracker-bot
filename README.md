@@ -81,13 +81,13 @@ ntb db init                          # Initialize database
 ntb db stats                         # View statistics
 ```
 
-## 📚 Documentation
+## Documentation
 
-Documentation is organized using the [Diataxis](https://diataxis.fr/) framework:
-
-- **[Getting Started Tutorial](docs/tutorials/getting-started.md)** - Step-by-step setup guide
-- **[Scheduling Guide](docs/how-to/SCHEDULING_GUIDE.md)** - Setup automated news delivery
-- **[CLI Reference](docs/reference/CLI_USAGE.md)** - Complete command reference
+- [Getting Started](docs/tutorials/getting-started.md) - Setup guide
+- [Scheduling](docs/how-to/scheduling.md) - Automated delivery
+- [Deployment](docs/how-to/deployment.md) - Production setup
+- [Cleanup](docs/how-to/cleanup.md) - Storage management
+- [CLI Reference](docs/reference/cli.md) - Commands
 
 ## 🔧 Technology Stack
 
