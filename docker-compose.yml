@@ -1,8 +1,6 @@
-version: '3.8'
-
 services:
   mongodb:
-    image: mongo:7.0
+    image: mongo:8.2.4
     container_name: news-tracker-mongodb
     restart: unless-stopped
     ports:
