@@ -4,6 +4,8 @@ __pycache__/
 *$py.class
 *.so
 .Python
+
+# Build artifacts (regenerated on install)
 build/
 develop-eggs/
 dist/
@@ -78,5 +80,5 @@ coverage.xml
 docs/_build/
 
 
-# Pipfile
-*.lock
+# Keep Pipfile.lock for reproducible builds
+# *.lock

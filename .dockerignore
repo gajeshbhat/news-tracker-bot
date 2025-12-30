@@ -52,7 +52,7 @@ Thumbs.db
 
 # Project specific
 logs.txt
-audio_summary/*.mp3
+data/audio/*.mp3
 *.log
 
 # Documentation

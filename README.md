@@ -40,7 +40,7 @@ docker compose up -d mongodb
 # 4. Install and initialize
 pip install pipenv
 pipenv install
-pipenv run python setup_database.py
+pipenv run ntb db init
 
 # 5. Generate a product key
 pipenv run ntb keys generate --notes "Admin key"
@@ -98,6 +98,4 @@ Documentation is organized using the [Diataxis](https://diataxis.fr/) framework:
 
 ## 📄 License
 
-MIT License - Originally built in 2017, modernized in 2025.
-
-**Built with ❤️ by [Gajesh](https://www.gajeshbhat.com)**
+MIT License

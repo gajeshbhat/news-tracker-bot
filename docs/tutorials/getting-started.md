@@ -79,7 +79,7 @@ pipenv install
 ## Step 6: Initialize Database
 
 ```bash
-pipenv run python setup_database.py
+pipenv run ntb db init
 ```
 
 You should see: "✅ Successfully loaded 127 news sources"

@@ -9,7 +9,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="news-tracker-bot",
-    version="1.1.0",
+    version="2.0.0",
     author="Gajesh Bhat",
     description="A Telegram bot for personalized news summaries with audio support",
     long_description=long_description,
