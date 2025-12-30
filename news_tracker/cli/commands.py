@@ -8,6 +8,10 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from tabulate import tabulate
+from dotenv import load_dotenv
+
+# Load .env file before anything else
+load_dotenv()
 
 from ..core.product_keys import ProductKeyManager
 from ..core.config import get_config
